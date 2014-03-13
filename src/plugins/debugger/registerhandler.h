@@ -33,6 +33,8 @@
 #include <QAbstractTableModel>
 #include <QVector>
 
+class QTextEdit;
+
 namespace Debugger {
 namespace Internal {
 
@@ -78,6 +80,8 @@ public:
     Q_SLOT void setNumberBase(int base);
     int numberBase() const { return m_base; }
 
+    void setPrettyOutputWidget( QTextEdit *prettyOutput )       { m_prettyOutput = prettyOutput; }
+
 signals:
     void registerSet(const QModelIndex &r); // Register was set, for memory views
 
@@ -91,6 +95,9 @@ private:
     QVariant headerData(int section, Qt::Orientation orientation,
         int role = Qt::DisplayRole) const;
     Qt::ItemFlags flags(const QModelIndex &idx) const;
+    void writePrettyOutput(const Registers &registers);
+
+    QTextEdit *m_prettyOutput;
 
     Registers m_registers;
     int m_base;

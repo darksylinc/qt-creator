@@ -51,6 +51,7 @@ class DebuggerMainWindowPrivate;
 const char DOCKWIDGET_BREAK[]         = "Debugger.Docks.Break";
 const char DOCKWIDGET_MODULES[]       = "Debugger.Docks.Modules";
 const char DOCKWIDGET_REGISTER[]      = "Debugger.Docks.Register";
+const char DOCKWIDGET_REGISTERPRETTY[]= "Debugger.Docks.RegisterPretty";
 const char DOCKWIDGET_OUTPUT[]        = "Debugger.Docks.Output";
 const char DOCKWIDGET_SNAPSHOTS[]     = "Debugger.Docks.Snapshots";
 const char DOCKWIDGET_STACK[]         = "Debugger.Docks.Stack";

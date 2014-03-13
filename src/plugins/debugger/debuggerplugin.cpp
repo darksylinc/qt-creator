@@ -51,6 +51,7 @@
 #include "logwindow.h"
 #include "moduleswindow.h"
 #include "moduleshandler.h"
+#include "registerhandler.h"
 #include "registerwindow.h"
 #include "snapshotwindow.h"
 #include "stackhandler.h"
@@ -1244,6 +1245,7 @@ public:
     WatchWindow *m_watchersWindow;
     WatchWindow *m_inspectorWindow;
     BaseWindow *m_registerWindow;
+    QTextEdit *m_registerPrettyWindow;
     BaseWindow *m_modulesWindow;
     BaseWindow *m_snapshotWindow;
     BaseWindow *m_sourceFilesWindow;
@@ -1296,6 +1298,7 @@ DebuggerPluginPrivate::DebuggerPluginPrivate(DebuggerPlugin *plugin) :
     m_watchersWindow = 0;
     m_inspectorWindow = 0;
     m_registerWindow = 0;
+    m_registerPrettyWindow = 0;
     m_modulesWindow = 0;
     m_snapshotWindow = 0;
     m_sourceFilesWindow = 0;
@@ -2102,6 +2105,8 @@ void DebuggerPluginPrivate::connectEngine(DebuggerEngine *engine)
     m_watchersWindow->setModel(engine->watchModel());
     m_inspectorWindow->setModel(engine->watchModel());
 
+    engine->registerHandler()->setPrettyOutputWidget( m_registerPrettyWindow );
+
     mainWindow()->setEngineDebugLanguages(engine->startParameters().languages);
     mainWindow()->setCurrentEngine(engine);
 }
@@ -2131,6 +2136,12 @@ void DebuggerPluginPrivate::fontSettingsChanged
     changeFontSize(m_threadsWindow, size);
     changeFontSize(m_watchersWindow, size);
     changeFontSize(m_inspectorWindow, size);
+
+    //Use a special font for the register pretty window
+    //as we need evenly spaced characters
+    QFont fixedSpaceFont( QLatin1String("Courier New") );
+    fixedSpaceFont.setPointSizeF( size );
+    m_registerPrettyWindow->setFont( fixedSpaceFont );
 }
 
 void DebuggerPluginPrivate::cleanupViews()
@@ -2176,6 +2187,7 @@ void DebuggerPluginPrivate::setBusyCursor(bool busy)
     m_modulesWindow->setCursor(cursor);
     m_logWindow->setCursor(cursor);
     m_registerWindow->setCursor(cursor);
+    m_registerPrettyWindow->setCursor(cursor);
     m_returnWindow->setCursor(cursor);
     m_sourceFilesWindow->setCursor(cursor);
     m_stackWindow->setCursor(cursor);
@@ -2748,6 +2760,11 @@ void DebuggerPluginPrivate::extensionsInitialized()
     m_logWindow->setObjectName(QLatin1String(DOCKWIDGET_OUTPUT));
     m_registerWindow = new RegisterWindow;
     m_registerWindow->setObjectName(QLatin1String(DOCKWIDGET_REGISTER));
+    m_registerPrettyWindow = new QTextEdit;
+    m_registerPrettyWindow->setWindowTitle(tr("Registers (pretty)"));
+    m_registerPrettyWindow->setObjectName(QLatin1String(DOCKWIDGET_REGISTERPRETTY));
+    m_registerPrettyWindow->setReadOnly( true );
+    m_registerPrettyWindow->setFont( QFont( QLatin1String( "Courier New" ), 11 ) );
     m_stackWindow = new StackWindow;
     m_stackWindow->setObjectName(QLatin1String(DOCKWIDGET_STACK));
     m_sourceFilesWindow = new SourceFilesWindow;
@@ -2864,6 +2881,8 @@ void DebuggerPluginPrivate::extensionsInitialized()
     dock = m_mainWindow->createDockWidget(CppLanguage, m_registerWindow);
     connect(dock->toggleViewAction(), SIGNAL(toggled(bool)),
         SLOT(registerDockToggled(bool)), Qt::QueuedConnection);
+
+    dock = m_mainWindow->createDockWidget(CppLanguage, m_registerPrettyWindow);
 
     dock = m_mainWindow->createDockWidget(CppLanguage, m_sourceFilesWindow);
     connect(dock->toggleViewAction(), SIGNAL(toggled(bool)),

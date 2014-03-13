@@ -34,6 +34,9 @@
 #include <modeltest.h>
 #endif
 
+#include <QScrollBar>
+#include <QTextEdit>
+
 #include <utils/qtcassert.h>
 
 namespace Debugger {
@@ -209,6 +212,14 @@ static struct RegisterNameAndType
     { "xmm5", RegisterXMM },
     { "xmm6", RegisterXMM },
     { "xmm7", RegisterXMM },
+    { "xmm8", RegisterXMM },
+    { "xmm9", RegisterXMM },
+    { "xmm10", RegisterXMM },
+    { "xmm11", RegisterXMM },
+    { "xmm12", RegisterXMM },
+    { "xmm13", RegisterXMM },
+    { "xmm14", RegisterXMM },
+    { "xmm15", RegisterXMM },
     { "mxcsr", RegisterFlags32 },
     { "orig_eax", RegisterI32 },
     { "al", RegisterI8 },
@@ -315,6 +326,7 @@ Register::Register(const QByteArray &name_)
 RegisterHandler::RegisterHandler()
 {
     setObjectName(QLatin1String("RegisterModel"));
+    m_prettyOutput = 0;
     m_base = 16;
     calculateWidth();
 #if USE_REGISTER_MODEL_TEST
@@ -384,7 +396,7 @@ QString Register::displayValue(int base, int strlen) const
 {
     const QVariant editV = editValue();
     if (editV.type() == QVariant::ULongLong)
-        return QString::fromLatin1("%1").arg(editV.toULongLong(), strlen, base);
+        return QString::fromLatin1("%1").arg(editV.toULongLong(), strlen, base, QLatin1Char('0'));
     const QString stringValue = editV.toString();
     if (stringValue.size() < strlen)
         return QString(strlen - stringValue.size(), QLatin1Char(' ')) + QLatin1String(value);
@@ -484,6 +496,230 @@ Qt::ItemFlags RegisterHandler::flags(const QModelIndex &idx) const
     return notEditable;
 }
 
+void RegisterHandler::writePrettyOutput(const Registers &registers)
+{
+    if( !m_prettyOutput )
+        return;
+
+    int oldPos = m_prettyOutput->verticalScrollBar()->value();
+    m_prettyOutput->clear();
+
+    Registers::const_iterator oldIt = m_registers.constBegin();
+
+    Registers::const_iterator itor = registers.constBegin();
+    Registers::const_iterator end  = registers.constEnd();
+
+    int newLineCount = 0;
+
+    QColor textColours[2];
+    textColours[0] = QColor( 0, 0, 0 );
+    textColours[1] = QColor( 200, 0, 0 );
+    int currentColour = 0;
+
+    while( itor != end )
+    {
+        const Register &reg = *itor;
+        const Register &oldReg = *oldIt;
+
+        //xmm registers go last, so we can pair them with their subchildren
+        if( reg.type != RegisterXMM )
+        {
+            bool changed = reg.value != oldReg.value;
+
+            if( changed && !currentColour )
+            {
+                currentColour = 1;
+                m_prettyOutput->setTextColor( textColours[currentColour] );
+            }
+            else if( !changed && currentColour )
+            {
+                currentColour = 0;
+                m_prettyOutput->setTextColor( textColours[currentColour] );
+            }
+
+            m_prettyOutput->insertPlainText( QLatin1String( reg.name ) );
+            m_prettyOutput->insertPlainText( QLatin1String( " = ") );
+
+            if( reg.type != RegisterF80 )
+            {
+                m_prettyOutput->insertPlainText( QLatin1String( reg.value ) );
+            }
+            else
+            {
+                //Floating point
+                int start = reg.value.indexOf( 'x' );
+                start = start == -1 ? 0 : (start + 1);
+
+                //Convert 80-bit registers to 64-bit representation (we loose a bit of
+                //precision, users can use the other register window which outputs in hex)
+                QString subReg;
+                subReg = QLatin1String( reg.value.mid( start, 16 ) );
+
+                union
+                {
+                    //Strict aliasing extension (any sane compiler should allow this)
+                    quint64 valueU64;
+                    double  valueDouble;
+                };
+
+                bool ok;
+                valueU64 = subReg.toLongLong( &ok, 16 );
+
+                Q_ASSERT( ok );
+
+                if( valueU64 == 0x7ff0000000000000 )
+                {
+                    m_prettyOutput->insertPlainText( QLatin1String( "###  Inf  ###") );
+                }
+                else if( valueU64 == 0xfff0000000000000 )
+                {
+                    m_prettyOutput->insertPlainText( QLatin1String( "### -Inf  ###") );
+                }
+                else if( ( (valueU64 & 0x7ff0000000000000) == 0x7ff0000000000000 ) &&
+                         (valueU64 &   0x000fffffffffffff) )
+                {
+                    m_prettyOutput->insertPlainText( QLatin1String( "###  NaN  ###") );
+                }
+                else
+                {
+                    //Positive values have a leading space, negative values start with '-'
+                    m_prettyOutput->insertPlainText( QLatin1String( valueU64 & 0x80000000000000 ?
+                                                                                "" : " " ) +
+                                                     QString::number( valueDouble, 'e', 14 ) +
+                                                     QLatin1String( " | ") +
+                                                     QLatin1String( reg.value ) );
+                }
+            }
+
+            ++newLineCount;
+
+            //> 80-bit registers are very long, one line for each
+            if( reg.type == RegisterI128 || reg.type == RegisterF80 )
+                newLineCount = 0;
+            else if( reg.type == RegisterI16 || reg.type == RegisterI8 )
+                newLineCount = newLineCount % 4;
+            else
+                newLineCount = newLineCount % 2;
+
+            m_prettyOutput->insertPlainText( QLatin1String( newLineCount ? "   " : "\n" ) );
+        }
+
+        ++oldIt;
+        ++itor;
+    }
+
+    m_prettyOutput->insertPlainText( QLatin1String( "\n" ) );
+
+    //Again, but this time only XMM registers
+    oldIt= m_registers.constBegin();
+    itor = registers.constBegin();
+
+    while( itor != end )
+    {
+        const Register &reg = *itor;
+        const Register &oldReg = *oldIt;
+
+        if( reg.type == RegisterXMM )
+        {
+            bool changed = reg.value != oldReg.value;
+
+            if( changed && !currentColour )
+            {
+                currentColour = 1;
+                m_prettyOutput->setTextColor( textColours[currentColour] );
+            }
+            else if( !changed && currentColour )
+            {
+                currentColour = 0;
+                m_prettyOutput->setTextColor( textColours[currentColour] );
+            }
+
+            m_prettyOutput->append( QLatin1String( reg.name ) );
+            m_prettyOutput->insertPlainText( QLatin1String( " = ") );
+            m_prettyOutput->insertPlainText( QLatin1String( reg.value ) );
+        }
+
+        ++oldIt;
+        ++itor;
+    }
+
+    m_prettyOutput->insertPlainText( QLatin1String( "\n" ) );
+
+
+    //Again! but only output children xmm registers (i.e. xmm00)
+    oldIt= m_registers.constBegin();
+    itor = registers.constBegin();
+
+    while( itor != end )
+    {
+        const Register &reg     = *itor;
+        const Register &oldReg  = *oldIt;
+
+        if( reg.type == RegisterXMM )
+        {
+            //Reinterpret as 4 floats
+            int start = reg.value.indexOf( 'x' );
+            start = start == -1 ? 0 : (start + 1);
+
+            for( size_t i=0; i<4; ++i )
+            {
+                QString subReg, oldSubReg;
+                subReg      = QLatin1String( reg.value.mid( start + (3-i) * 8, 8 ) );
+                oldSubReg   = QLatin1String( oldReg.value.mid( start + (3-i) * 8, 8 ) );
+
+                union
+                {
+                    //Strict aliasing extension (any sane compiler should allow this)
+                    quint32  valueU32;
+                    float   valueFloat;
+                };
+
+                bool ok;
+                quint32 oldValue= oldSubReg.toUInt( &ok, 16 );
+                valueU32        = subReg.toUInt( &ok, 16 );
+
+                Q_ASSERT( ok );
+
+                bool changed = valueU32 != oldValue;
+                if( changed && !currentColour )
+                {
+                    currentColour = 1;
+                    m_prettyOutput->setTextColor( textColours[currentColour] );
+                }
+                else if( !changed && currentColour )
+                {
+                    currentColour = 0;
+                    m_prettyOutput->setTextColor( textColours[currentColour] );
+                }
+
+                m_prettyOutput->insertPlainText( QLatin1String( reg.name ) + QString::number( i ) );
+                m_prettyOutput->insertPlainText( QLatin1String( " = ") );
+
+                if( valueU32 == 0x7f800000 )
+                    m_prettyOutput->insertPlainText( QLatin1String( "###  Inf  ###  ") );
+                else if( valueU32 == 0xff800000 )
+                    m_prettyOutput->insertPlainText( QLatin1String( "### -Inf  ###  ") );
+                else if( ( (valueU32 & 0x7f800000) == 0x7f800000 ) && (valueU32 & 0x007fffff) )
+                    m_prettyOutput->insertPlainText( QLatin1String( "###  NaN  ###  ") );
+                else
+                {
+                    //Positive values have a leading space, negative values start with '-'
+                    m_prettyOutput->insertPlainText( QLatin1String( valueU32 & 0x80000000 ? "" : " " ) +
+                                                     QString::number( valueFloat, 'e' ) +
+                                                     QLatin1String( "  ") );
+                }
+            }
+
+            m_prettyOutput->insertPlainText( QLatin1String( "\n" ) );
+        }
+
+        ++oldIt;
+        ++itor;
+    }
+
+    m_prettyOutput->verticalScrollBar()->setValue( oldPos );
+}
+
 void RegisterHandler::removeAll()
 {
     beginResetModel();
@@ -523,8 +759,12 @@ void RegisterHandler::setAndMarkRegisters(const Registers &registers)
 {
     if (!compareRegisterSet(m_registers, registers)) {
         setRegisters(registers);
+        writePrettyOutput(registers);
         return;
     }
+
+    writePrettyOutput(registers);
+
     const int size = m_registers.size();
     for (int r = 0; r != size; ++r) {
         const QModelIndex regIndex = index(r, 1, QModelIndex());
