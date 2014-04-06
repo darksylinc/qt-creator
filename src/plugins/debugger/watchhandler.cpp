@@ -711,6 +711,14 @@ QString WatchModel::formattedValue(const WatchData &data) const
             const int format = itemFormat(data);
             return reformatInteger(integer, format, data.size, false);
         }
+
+        if( value.startsWith( QLatin1Literal( "@0x" )) && data.type.endsWith( ']' ) )
+        {
+            //This is an array displaying an address, add leading zeroes
+            return QString( QLatin1String("@0x%1") ).arg(
+                        data.address, engine()->startParameters().toolChainAbi.wordWidth() >> 2,
+                        16, QLatin1Char('0') );
+        }
     }
 
     return translate(value);

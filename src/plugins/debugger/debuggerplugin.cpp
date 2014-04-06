@@ -916,6 +916,7 @@ public slots:
     void setInitialState();
 
     void fontSettingsChanged(const TextEditor::FontSettings &settings);
+    void defaultToMonospaceFonts();
 
     void updateState(DebuggerEngine *engine);
     void updateWatchersWindow(bool showWatch, bool showReturn);
@@ -2113,7 +2114,7 @@ void DebuggerPluginPrivate::connectEngine(DebuggerEngine *engine)
 
 static void changeFontSize(QWidget *widget, qreal size)
 {
-    QFont font = widget->font();
+    QFont font( QLatin1String("Monospace") );
     font.setPointSizeF(size);
     widget->setFont(font);
 }
@@ -2142,6 +2143,29 @@ void DebuggerPluginPrivate::fontSettingsChanged
     QFont fixedSpaceFont( QLatin1String("Courier New") );
     fixedSpaceFont.setPointSizeF( size );
     m_registerPrettyWindow->setFont( fixedSpaceFont );
+}
+
+static void changeFont(QWidget *widget)
+{
+    QFont font( QLatin1String("Monospace") );
+    font.setPointSizeF( widget->font().pointSizeF() );
+    widget->setFont(font);
+}
+
+void DebuggerPluginPrivate::defaultToMonospaceFonts()
+{
+    changeFont(m_breakWindow);
+    changeFont(m_logWindow);
+    changeFont(m_localsWindow);
+    changeFont(m_modulesWindow);
+    //changeFont(m_consoleWindow);
+    changeFont(m_registerWindow);
+    changeFont(m_returnWindow);
+    changeFont(m_sourceFilesWindow);
+    changeFont(m_stackWindow);
+    changeFont(m_threadsWindow);
+    changeFont(m_watchersWindow);
+    changeFont(m_inspectorWindow);
 }
 
 void DebuggerPluginPrivate::cleanupViews()
@@ -2785,6 +2809,8 @@ void DebuggerPluginPrivate::extensionsInitialized()
     m_snapshotWindow = new SnapshotWindow(m_snapshotHandler);
     m_snapshotWindow->setObjectName(QLatin1String(DOCKWIDGET_SNAPSHOTS));
     m_snapshotWindow->setModel(m_snapshotHandler->model());
+
+    defaultToMonospaceFonts();
 
     // Watchers
     connect(m_localsWindow->header(), SIGNAL(sectionResized(int,int,int)),
