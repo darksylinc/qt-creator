@@ -531,7 +531,7 @@ template <class IntType> QString reformatInteger(IntType value, int format)
 {
     switch (format) {
         case HexadecimalFormat:
-            return QLatin1String("(hex) ") + QString::number(value, 16);
+            return QString( QLatin1String("0x%1") ).arg(value, sizeof(IntType) * 2, 16, QLatin1Char('0') );
         case BinaryFormat:
             return QLatin1String("(bin) ") + QString::number(value, 2);
         case OctalFormat:
@@ -679,9 +679,21 @@ QString WatchModel::formattedValue(const WatchData &data) const
             const int code = value.toInt(&ok);
             return ok ? reformatCharacter(code, format) : value;
         }
-        // Rest: Leave decimal as is
+
         if (format <= 0)
-            return value;
+        {
+            if( isPointerType(data.type) )
+            {
+                //Pointers: Ensure leading zeroes.
+                quint64 raw = value.toULongLong();
+                return reformatInteger(raw, HexadecimalFormat, data.size, false);
+            }
+            else
+            {
+                // Rest: Leave decimal as is
+                return value;
+            }
+        }
 
         bool isSigned = value.startsWith(QLatin1Char('-'));
         quint64 raw = isSigned ? quint64(value.toLongLong()): value.toULongLong();
@@ -993,7 +1005,10 @@ QString WatchModel::displayValue(const WatchData &data) const
 {
     QString result = removeNamespaces(truncateValue(formattedValue(data)));
     if (result.isEmpty() && data.address)
-        result += QString::fromLatin1("@0x" + QByteArray::number(data.address, 16));
+    {
+        result += QString( QLatin1String("@0x%1") ).arg(
+                            data.address, data.size * 2, 16, QLatin1Char('0') );
+    }
 //    if (data.origaddr)
 //        result += QString::fromLatin1(" (0x" + QByteArray::number(data.origaddr, 16) + ')');
     return result;

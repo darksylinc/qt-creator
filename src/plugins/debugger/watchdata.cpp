@@ -388,7 +388,7 @@ QString WatchData::toToolTip() const
         bool ok;
         const quint64 intValue = val.toULongLong(&ok);
         if (ok && intValue)
-            val += QLatin1String(" (hex) ") + QString::number(intValue, 16);
+            val += QString( QLatin1String("0x%1") ).arg(intValue, size * 2, 16, QLatin1Char('0') );
     }
     if (val.size() > 1000) {
         val.truncate(1000);
