@@ -36,6 +36,7 @@
 #include "debuggerengine.h"
 #include "debuggerinternalconstants.h"
 #include "debuggerprotocol.h"
+#include "debuggerstartparameters.h"
 #include "simplifytype.h"
 #include "imageviewer.h"
 #include "watchutils.h"
@@ -1007,7 +1008,8 @@ QString WatchModel::displayValue(const WatchData &data) const
     if (result.isEmpty() && data.address)
     {
         result += QString( QLatin1String("@0x%1") ).arg(
-                            data.address, data.size * 2, 16, QLatin1Char('0') );
+                            data.address, engine()->startParameters().toolChainAbi.wordWidth() >> 2,
+                            16, QLatin1Char('0') );
     }
 //    if (data.origaddr)
 //        result += QString::fromLatin1(" (0x" + QByteArray::number(data.origaddr, 16) + ')');
